@@ -12,7 +12,7 @@ Additionally, the script logs events and errors for monitoring purposes.
 
 1. Clone the repository:
 ```bash
-https://github.com/deidStorm/okta-group-vcenter.git
+git clone https://github.com/deidStorm/okta-group-vcenter.git
 cd okta-group-vcenter
 ```
 
