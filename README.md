@@ -12,8 +12,8 @@ Additionally, the script logs events and errors for monitoring purposes.
 
 1. Clone the repository:
 ```bash
-git clone https://git.sinthera.com/dtonicello/Aquafil-vCenterAPI.git
-cd Aquafil-vCenterAPI
+https://github.com/deidStorm/okta-group-vcenter.git
+cd okta-group-vcenter
 ```
 
 ### Create a service app in Okta
