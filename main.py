@@ -188,7 +188,7 @@ def delete_vcsa_user(row) -> None:
 
 
 # Return the vcsa user id
-def get_vcsa_user_id(userName):
+def get_vcsa_user_id(userName) -> None:
     try:
         response = get(f"https://{VCSA_HOST}/{VCSA_APIUSERS}", headers=VCSA_HEADERS)
         users = response.json()
@@ -198,8 +198,8 @@ def get_vcsa_user_id(userName):
         raise UserNotFoundException
     except requests.RequestException:
         return
-    except GroupNotFoundException:
-        print(f"Group {userName} not found in {VCSA_HOST}")
+    except UserNotFoundException:
+        print(f"User {userName} not found in {VCSA_HOST}")
 
 
 # Return the vcsa group id
