@@ -11,9 +11,12 @@ Additionally, the script logs events and errors for monitoring purposes.
 ## Installation
 
 1. Clone the repository:
+
 ```bash
-git clone https://github.com/deidStorm/okta-group-vcenter.git
-cd okta-group-vcenter
+
+git clone ssh://git@git.sinthera.com:2222/dtonicello/aquafil-okta-vcenter-groups.git
+
+cd aquafil-okta-vcenter-groups
 ```
 
 ### Create a service app in Okta
@@ -54,10 +57,12 @@ pip install -r requirements.txt
 
 ## Usage
 
-1. Run the following command to start:
-```python
+Run the following command to start:
+```bash
+source venv/bin/activate
 python3 main.py
 ```
+
 Then enter '`1`', '`2`' or '`3`' to:
 1. **Sync** the group from okta to vCenter. If some users missing in the vCenter group then create them, if some users are not in the okta group then delete them;
 2. **Create** the group in vCenter;
@@ -65,6 +70,19 @@ Then enter '`1`', '`2`' or '`3`' to:
    
 Now enter the `group name` case insensitive to process.
 
+Alternative Usage:
+```bash
+python3 main.py  --sync | --create | --delete GROUPNAME
+```
+Note:
+
+Only one of --sync, --create, or --delete can be used at a time.
+GROUPNAME is a required positional argument representing the name of the group to be processed.
+
+For more details, run: 
+```bash
+python3 main.py --help
+```
 
 ## Contributing
 
