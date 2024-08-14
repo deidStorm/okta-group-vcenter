@@ -10,14 +10,7 @@ Additionally, the script logs events and errors for monitoring purposes.
 
 ## Installation
 
-1. Clone the repository:
-
-```bash
-
-git clone ssh://git@git.sinthera.com:2222/dtonicello/aquafil-okta-vcenter-groups.git
-
-cd aquafil-okta-vcenter-groups
-```
+1. Clone the repository
 
 ### Create a service app in Okta
 Follow this guide: https://developer.okta.com/docs/reference/rest/#create-a-service-app-in-okta
