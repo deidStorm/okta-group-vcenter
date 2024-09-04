@@ -4,6 +4,7 @@ import jwt
 from cryptography.hazmat.primitives import serialization
 import requests
 import time
+from datetime import datetime
 from urllib3.exceptions import InsecureRequestWarning
 import logging
 from dotenv import load_dotenv
@@ -12,10 +13,18 @@ from dotenv import load_dotenv
 requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
 
 # Setting log file and format
+
+log_dir = os.path.abspath(os.path.expanduser("~/logs_okta-group-vcenter"))
+
+os.makedirs(log_dir, exist_ok=True)
+
+log_file = os.path.join(log_dir, datetime.today().strftime("%Y%m%d_%H%M%S") + ".log")
+
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
     level=logging.INFO,
-    filename="log.txt",
+    filename=log_file,
+    # r"~/logs/" + datetime.today().strftime("%Y%m%d-%H:%M:%S") + ".log",
     encoding="utf-8",
 )
 
@@ -146,7 +155,6 @@ def create_vcsa_user(row, groupName) -> None:
 
 # Create the vcsa group
 def create_vcsa_group(groupName) -> None:
-    print_and_log(f"Start creating group {groupName} in {VCSA_HOST}")
     json_data = {"displayName": groupName, "schemas": ["urn:scim:schemas:core:1.0"]}
     try:
         logging.info(
@@ -158,7 +166,7 @@ def create_vcsa_group(groupName) -> None:
             json=json_data,
             verify=False,
         )
-        print(f"Group {groupName} successfully created!")
+        print_and_log(f"Group {groupName} successfully created!")
         print_and_log(
             "To ensure the group has vCenter permissions you need to add it to a vCenter Group of which you can assign permissions to actually allow you to take actions.",
             "warning",
@@ -248,14 +256,13 @@ def remove_group_member(row):
 
 # Delete the group by id
 def delete_vcsa_group(groupName):
-    print_and_log(f"Start deleting group {groupName}")
     try:
         groupId = get_vcsa_group_id(groupName)
         try:
             delete(
                 f"https://{VCSA_HOST}/{VCSA_APIGROUPS}/{groupId}", headers=VCSA_HEADERS
             )
-            print(f"Group '{groupName}' successfully deleted")
+            print_and_log(f"Group '{groupName}' successfully deleted")
         except requests.RequestException:
             return
     except GroupNotFoundException as e:
@@ -354,7 +361,7 @@ def get_okta_jwt():
 
 def get_okta_members_of_group(groupName):
 
-    print("\nStart getting users from Okta group")
+    print_and_log("\nStart getting users from Okta group")
 
     okta_users = []
 
@@ -402,7 +409,7 @@ def get_okta_members_of_group(groupName):
 
 def get_vcenter_members_of_group(groupName):
 
-    print("\nStarting get users from vCenter group")
+    print_and_log("\nStarting get users from vCenter group")
 
     vcsa_users = []
 
@@ -456,7 +463,7 @@ def test_okta_connection():
     print("Start connecting to Okta")
     okta_bearer_token = get_okta_bearer_token()
     if okta_bearer_token:
-        print(f"Successfully connected to Okta!")
+        print_and_log(f"Successfully connected to Okta!")
 
 
 def test_vcenter_connection():
@@ -464,11 +471,13 @@ def test_vcenter_connection():
     print("Start connecting to vCenter")
     response = get(f"https://{VCSA_HOST}/{VCSA_APIGROUPS}", VCSA_HEADERS)
     if response:
-        print("Successfully connected to vCenter!")
+        print_and_log("Successfully connected to vCenter!")
 
 
 # Main function
 def main():
+
+    logging.info(f" ----- START SCRIPT -----")
 
     description = "This Python script handles some basics user and group operations into a vCenter from Okta source. It interacts with Okta and vCenter through the Okta API and through the vCenter SCIM API, using HTTP requests exclusively for managing user and group operations. The admitted operations are 3:\n\t1.Syncing group members from Okta to vCenter - create or delete user where is necessary;\n\t2.Create vCenter group;\n\t3.Delete vCenter group;\n\t4.Test the connection to Okta or vCenter;\n\nAdditionally, the script logs events and errors for monitoring purposes."
 
@@ -510,13 +519,20 @@ def main():
         action = "4"
         object_to_test = args.test
     else:
-        print("Select an option: \n\t1. Sync \n\t2. Create group \n\t3. Delete group")
+        print(
+            "Select an option: \n\t1. Sync \n\t2. Create group \n\t3. Delete group \n\t4. Test connection"
+        )
         action = input()
-        print("Insert the group name:")
-        groupName = input()
+        if action == "4":
+            print("Insert the object to test (okta | vcenter):")
+            object_to_test = input()
+        else:
+            print("Insert the group name:")
+            groupName = input()
 
     if action == "1" and groupName != "":
         # sync group
+        logging.info(f"Start syncing group " + groupName)
         okta_users = get_okta_members_of_group(groupName)
         vcsa_users = get_vcenter_members_of_group(groupName)
 
@@ -533,7 +549,7 @@ def main():
 
             if users_to_add:
                 for user in users_to_add:
-                    print("\nStart adding user: ", user)
+                    print_and_log("\nStart adding user: " + user + " to vCenter group")
                     if get_vcsa_user_id(user["username"]) is None:
                         create_vcsa_user(user, groupName)
                     else:
@@ -549,30 +565,37 @@ def main():
 
             if users_to_delete:
                 for user in users_to_delete:
-                    print("\nStart deleting user:", user)
+                    print_and_log(
+                        "\nStart deleting user:" + user + " from vCenter group"
+                    )
                     delete_vcsa_user(user)
 
         if not users_to_delete and not users_to_add:
-            print("\nNo operations needed")
+            print_and_log("\nNo operations needed, the groups are already synced")
 
     elif action == "2" and groupName != "":
         # create group
+        print_and_log(f"Start creating group {groupName} in {VCSA_HOST}")
         create_vcsa_group(groupName)
 
     elif action == "3" and groupName != "":
         # delete group
+        print_and_log(f"Start deleting group {groupName}")
         delete_vcsa_group(groupName)
 
     elif action == "4" and object_to_test != "":
         # test connection
+        logging.info(f"Start testing connection to " + object_to_test)
         if object_to_test.lower().strip() == "okta":
             test_okta_connection()
         elif object_to_test.lower().strip() == "vcenter":
             test_vcenter_connection()
     else:
-        print(
+        print_and_log(
             "Invalid choice, please enter '1' to sync an existing group,'2' to creating a group, '3' to deleting a group or '4' to test a connection"
         )
+
+    logging.info(f"----- END SCRIPT -----")
 
 
 if __name__ == "__main__":
