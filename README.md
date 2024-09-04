@@ -62,15 +62,16 @@ Then enter '`1`', '`2`', '`3`' or '`4`' to:
 3. **Delete** the group in vCenter;
 4. **Test** the connection to Okta or vCenter;
    
-Now enter the `group name` case insensitive to process.
+Then enter the `group` (or `groups`) name or the object to test (`okta` or `vcenter`) case insensitive to process.
 
 Alternative Usage:
 ```bash
-python3 main.py  --sync GROUPNAME | --create GROUPNAME | --delete GROUPNAME | --test 
+python3 main.py  --sync GROUPNAME | --create GROUPNAME | --delete GROUPNAME | --test OBJ
 ```
 Note:
 
-Only one of --sync, --create, --delete or --test can be used at a time.
+Only one of --sync, --create, --delete or --test can be used at a time. It is possible to sync more than one group at time specifing more than one group, eg. `python3 main.py --sync teamA admins dev`
+
 In case of the group operations GROUPNAME is a required positional argument representing the name of the group to be processed.
 
 For more details, run: 

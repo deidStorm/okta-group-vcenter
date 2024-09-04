@@ -18,13 +18,14 @@ log_dir = os.path.abspath(os.path.expanduser("~/logs_okta-group-vcenter"))
 
 os.makedirs(log_dir, exist_ok=True)
 
-log_file = os.path.join(log_dir, datetime.today().strftime("%Y%m%d_%H%M%S") + ".log")
+log_file = os.path.join(
+    log_dir, "last-" + datetime.today().strftime("%A").lower() + ".log"
+)
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
     level=logging.INFO,
     filename=log_file,
-    # r"~/logs/" + datetime.today().strftime("%Y%m%d-%H:%M:%S") + ".log",
     encoding="utf-8",
 )
 
@@ -40,6 +41,10 @@ OKTA_CLIENTID = os.getenv("OKTA_CLIENTID")
 
 tokens_list = VCSA_BEARER_TOKENS.split(",")
 hosts_list = VCSA_HOSTS.split(",")
+
+global vcsa_host
+global vcsa_bearer_token
+global vcsa_headers
 
 
 class UserNotFoundException(Exception):
@@ -360,7 +365,7 @@ def get_okta_jwt():
 
 def get_okta_members_of_group(groupName):
 
-    print_and_log("\nStart getting users from Okta group")
+    print_and_log("Start getting users from Okta group")
 
     okta_users = []
 
@@ -373,10 +378,14 @@ def get_okta_members_of_group(groupName):
     }
 
     # Get href to retrieve members
-    response = get(f"https://{OKTA_HOST}/api/v1/groups?q={groupName}", okta_headers)
+    response = get(
+        f"https://{OKTA_HOST}/api/v1/groups?q={groupName}",
+        okta_headers,
+    )
 
     # Get from href to retrieve members
     if len(response.json()) > 0:
+        print(response.json())
         members = get(response.json()[0]["_links"]["users"]["href"], okta_headers)
 
         for user in members.json():
@@ -408,7 +417,7 @@ def get_okta_members_of_group(groupName):
 
 def get_vcenter_members_of_group(groupName):
 
-    print_and_log("\nStarting get users from vCenter group")
+    print_and_log("Starting get users from vCenter group")
 
     vcsa_users = []
 
@@ -467,7 +476,7 @@ def test_okta_connection():
 
 def test_vcenter_connection():
 
-    print("Start connecting to vCenter")
+    print(f"Start connecting to vCenter {vcsa_host}")
     response = get(f"https://{vcsa_host}/{VCSA_APIGROUPS}", vcsa_headers)
     if response:
         print_and_log("Successfully connected to vCenter!")
@@ -476,9 +485,13 @@ def test_vcenter_connection():
 # Main function
 def main():
 
-    logging.info(f" ----- START SCRIPT -----")
+    logging.info(f"----- START SCRIPT -----")
 
-    description = "This Python script handles some basics user and group operations into a vCenter from Okta source. It interacts with Okta and vCenter through the Okta API and through the vCenter SCIM API, using HTTP requests exclusively for managing user and group operations. The admitted operations are 3:\n\t1.Syncing group members from Okta to vCenter - create or delete user where is necessary;\n\t2.Create vCenter group;\n\t3.Delete vCenter group;\n\t4.Test the connection to Okta or vCenter;\n\nAdditionally, the script logs events and errors for monitoring purposes."
+    global vcsa_host
+    global vcsa_bearer_token
+    global vcsa_headers
+
+    description = "This Python script handles some basics user and group operations into a vCenter from Okta source. It interacts with Okta and vCenter through the Okta API and through the vCenter SCIM API, using HTTP requests exclusively for managing user and group operations. The admitted operations are 3:\n\t1.Syncing group members from Okta to vCenter - create or delete user where is necessary;\n\t2.Create vCenter group;\n\t3.Delete vCenter group;\n\t4.Test the connection to Okta or vCenter;\n\nMultiple groups are admitted, see usage section.\nAdditionally, the script logs events and errors for monitoring purposes."
 
     parser = argparse.ArgumentParser(
         description=description, formatter_class=argparse.RawTextHelpFormatter
@@ -487,14 +500,23 @@ def main():
     group.add_argument(
         "--sync",
         type=str,
-        help="sync the group from Okta to vCenter",
+        help="sync the group from Okta to vCenter, specify more than one group if needed",
         metavar="groupName",
+        nargs="+",
     )
     group.add_argument(
-        "--create", type=str, help="create the vCenter group", metavar="groupName"
+        "--create",
+        type=str,
+        help="create the vCenter group",
+        metavar="groupName",
+        nargs="+",
     )
     group.add_argument(
-        "--delete", type=str, help="delete the vCenter group", metavar="groupName"
+        "--delete",
+        type=str,
+        help="delete the vCenter group",
+        metavar="groupName",
+        nargs="+",
     )
     group.add_argument(
         "--test",
@@ -504,16 +526,16 @@ def main():
     )
 
     args = parser.parse_args()
-
+    print("args:", args)
     if args.sync:
         action = "1"
-        groupName = args.sync
+        groupNames = args.sync
     elif args.create:
         action = "2"
-        groupName = args.create
+        groupNames = args.create
     elif args.delete:
         action = "3"
-        groupName = args.delete
+        groupNames = args.delete
     elif args.test:
         action = "4"
         object_to_test = args.test
@@ -526,100 +548,94 @@ def main():
             print("Insert the object to test (okta | vcenter):")
             object_to_test = input()
         else:
-            print("Insert the group name:")
-            groupName = input()
+            print("Insert the group (or groups) name:")
+            groupNames = input()
 
-    if action == "1" and groupName != "":
-        for token, host in zip(tokens_list, hosts_list):
-            global vcsa_host
-            global vcsa_bearer_token
-            global vcsa_headers
-
-            vcsa_host = host
-            vcsa_bearer_token = token
-            vcsa_headers = {
-                "Authorization": "Bearer " + vcsa_bearer_token,
-                "Content-Type": "application/scim+json",
-            }
-
-            # sync group
-            logging.info(
-                f"Start syncing group " + groupName + " in vCenter " + vcsa_host
-            )
+    if action == "1" and groupNames:
+        for groupName in groupNames:
             okta_users = get_okta_members_of_group(groupName)
-            vcsa_users = get_vcenter_members_of_group(groupName)
+            for token, host in zip(tokens_list, hosts_list):
+                vcsa_host = host
+                vcsa_bearer_token = token
+                vcsa_headers = {
+                    "Authorization": "Bearer " + vcsa_bearer_token,
+                    "Content-Type": "application/scim+json",
+                }
 
-            users_to_add = []
+                # sync group
+                logging.info(
+                    f"Start syncing group " + groupName + " in vCenter " + vcsa_host
+                )
 
-            users_to_delete = []
+                vcsa_users = get_vcenter_members_of_group(groupName)
 
-            # 1. Get users to create
-            if okta_users:
-                vcenter_user_ids = {user["user_id"] for user in vcsa_users}
-                for user in okta_users:
-                    if user["user_id"] not in vcenter_user_ids:
-                        users_to_add.append(user)
+                users_to_add = []
 
-                if users_to_add:
-                    for user in users_to_add:
-                        print_and_log(
-                            "\nStart adding user: " + user + " to vCenter group"
-                        )
-                        if get_vcsa_user_id(user["username"]) is None:
-                            create_vcsa_user(user, groupName)
-                        else:
-                            print(f"The user already exists in {vcsa_host}")
-                            add_vcsa_member_group(user, groupName)
+                users_to_delete = []
 
-            # 2. Get users to delete
-            if vcsa_users:
-                okta_user_ids = {user["user_id"] for user in okta_users}
-                for user in vcsa_users:
-                    if user["user_id"] not in okta_user_ids:
-                        users_to_delete.append(user)
+                # 1. Get users to create
+                if okta_users:
+                    vcenter_user_ids = {user["user_id"] for user in vcsa_users}
+                    for user in okta_users:
+                        if user["user_id"] not in vcenter_user_ids:
+                            users_to_add.append(user)
 
-                if users_to_delete:
-                    for user in users_to_delete:
-                        print_and_log(
-                            "\nStart deleting user:" + user + " from vCenter group"
-                        )
-                        delete_vcsa_user(user)
+                    if users_to_add:
+                        for user in users_to_add:
+                            print_and_log(f"Start adding user: {user} to vCenter group")
+                            if get_vcsa_user_id(user["username"]) is None:
+                                create_vcsa_user(user, groupName)
+                            else:
+                                print(f"The user already exists in {vcsa_host}")
+                                add_vcsa_member_group(user, groupName)
 
-            if not users_to_delete and not users_to_add:
-                print_and_log("\nNo operations needed, the groups are already synced")
+                # 2. Get users to delete
+                if vcsa_users:
+                    okta_user_ids = {user["user_id"] for user in okta_users}
+                    for user in vcsa_users:
+                        if user["user_id"] not in okta_user_ids:
+                            users_to_delete.append(user)
 
-            logging.info(f"Group {groupName} succesfully synced in vCenter {vcsa_host}")
-    elif action == "2" and groupName != "":
-        for token, host in zip(tokens_list, hosts_list):
-            global vcsa_host
-            global vcsa_bearer_token
-            global vcsa_headers
+                    if users_to_delete:
+                        for user in users_to_delete:
+                            print_and_log(
+                                f"Start deleting user: {user} from vCenter group"
+                            )
+                            delete_vcsa_user(user)
 
-            vcsa_host = host
-            vcsa_bearer_token = token
-            vcsa_headers = {
-                "Authorization": "Bearer " + vcsa_bearer_token,
-                "Content-Type": "application/scim+json",
-            }
-            # create group
-            print_and_log(f"Start creating group {groupName} in {vcsa_host}")
-            create_vcsa_group(groupName)
+                if not users_to_delete and not users_to_add:
+                    print_and_log("No operations needed, the groups are already synced")
 
-    elif action == "3" and groupName != "":
-        for token, host in zip(tokens_list, hosts_list):
-            global vcsa_host
-            global vcsa_bearer_token
-            global vcsa_headers
+                logging.info(
+                    f"Group {groupName} succesfully synced in vCenter {vcsa_host}"
+                )
+    elif action == "2" and groupNames:
+        for groupName in groupNames:
+            for token, host in zip(tokens_list, hosts_list):
 
-            vcsa_host = host
-            vcsa_bearer_token = token
-            vcsa_headers = {
-                "Authorization": "Bearer " + vcsa_bearer_token,
-                "Content-Type": "application/scim+json",
-            }
-            # delete group
-            print_and_log(f"Start deleting group {groupName} in {vcsa_host}")
-            delete_vcsa_group(groupName)
+                vcsa_host = host
+                vcsa_bearer_token = token
+                vcsa_headers = {
+                    "Authorization": "Bearer " + vcsa_bearer_token,
+                    "Content-Type": "application/scim+json",
+                }
+                # create group
+                print_and_log(f"Start creating group {groupName} in {vcsa_host}")
+                create_vcsa_group(groupName)
+
+    elif action == "3" and groupNames:
+        for groupName in groupNames:
+            for token, host in zip(tokens_list, hosts_list):
+
+                vcsa_host = host
+                vcsa_bearer_token = token
+                vcsa_headers = {
+                    "Authorization": "Bearer " + vcsa_bearer_token,
+                    "Content-Type": "application/scim+json",
+                }
+                # delete group
+                print_and_log(f"Start deleting group {groupName} in {vcsa_host}")
+                delete_vcsa_group(groupName)
 
     elif action == "4" and object_to_test != "":
         # test connection
@@ -628,9 +644,6 @@ def main():
             test_okta_connection()
         elif object_to_test.lower().strip() == "vcenter":
             for token, host in zip(tokens_list, hosts_list):
-                global vcsa_host
-                global vcsa_bearer_token
-                global vcsa_headers
 
                 vcsa_host = host
                 vcsa_bearer_token = token
