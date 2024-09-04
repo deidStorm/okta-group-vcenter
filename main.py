@@ -33,14 +33,13 @@ load_dotenv()
 
 VCSA_APIGROUPS = "usergroup/t/CUSTOMER/scim/v2/Groups"
 VCSA_APIUSERS = "usergroup/t/CUSTOMER/scim/v2/Users"
-VCSA_BEARER_TOKEN = os.getenv("VCSA_BEARER_TOKEN")
-VCSA_HEADERS = {
-    "Authorization": "Bearer " + VCSA_BEARER_TOKEN,
-    "Content-Type": "application/scim+json",
-}
-VCSA_HOST = os.getenv("VCSA_HOST")
+VCSA_BEARER_TOKENS = os.getenv("VCSA_BEARER_TOKENS")
+VCSA_HOSTS = os.getenv("VCSA_HOSTS")
 OKTA_HOST = os.getenv("OKTA_HOST")
 OKTA_CLIENTID = os.getenv("OKTA_CLIENTID")
+
+tokens_list = VCSA_BEARER_TOKENS.split(",")
+hosts_list = VCSA_HOSTS.split(",")
 
 
 class UserNotFoundException(Exception):
@@ -116,7 +115,7 @@ def patch(url, headers, json_data={}):
 
 # Create new user and add it to the group
 def create_vcsa_user(row, groupName) -> None:
-    print_and_log(f"Start creating user {row['username']} in {VCSA_HOST}")
+    print_and_log(f"Start creating user {row['username']} in {vcsa_host}")
     json_data = {
         "emails": [{"value": row["username"]}],
         "name": {
@@ -133,11 +132,11 @@ def create_vcsa_user(row, groupName) -> None:
 
     try:
         logging.info(
-            f"POST - url: https://{VCSA_HOST}/{VCSA_APIUSERS} - headers: {VCSA_HEADERS} - body: {json_data}"
+            f"POST - url: https://{vcsa_host}/{VCSA_APIUSERS} - headers: {vcsa_headers} - body: {json_data}"
         )
         requests.post(
-            f"https://{VCSA_HOST}/{VCSA_APIUSERS}",
-            headers=VCSA_HEADERS,
+            f"https://{vcsa_host}/{VCSA_APIUSERS}",
+            headers=vcsa_headers,
             json=json_data,
             verify=False,
         )
@@ -145,7 +144,7 @@ def create_vcsa_user(row, groupName) -> None:
     except requests.RequestException as e:
         print(f"Error creating user '{row['username']}'")
         print_and_log(
-            f"Error posting data from url https://{VCSA_HOST}/{VCSA_APIUSERS}: {e}",
+            f"Error posting data from url https://{vcsa_host}/{VCSA_APIUSERS}: {e}",
             "error",
         )
         return
@@ -158,22 +157,22 @@ def create_vcsa_group(groupName) -> None:
     json_data = {"displayName": groupName, "schemas": ["urn:scim:schemas:core:1.0"]}
     try:
         logging.info(
-            f"POST - url: https://{VCSA_HOST}/{VCSA_APIUSERS} - headers: {VCSA_HEADERS} - body: {json_data}"
+            f"POST - url: https://{vcsa_host}/{VCSA_APIUSERS} - headers: {vcsa_headers} - body: {json_data}"
         )
         requests.post(
-            f"https://{VCSA_HOST}/{VCSA_APIGROUPS}",
-            headers=VCSA_HEADERS,
+            f"https://{vcsa_host}/{VCSA_APIGROUPS}",
+            headers=vcsa_headers,
             json=json_data,
             verify=False,
         )
-        print_and_log(f"Group {groupName} successfully created!")
+        print_and_log(f"Group {groupName} succesfully created in {vcsa_host}!")
         print_and_log(
             "To ensure the group has vCenter permissions you need to add it to a vCenter Group of which you can assign permissions to actually allow you to take actions.",
             "warning",
         )
     except requests.RequestException as e:
         print_and_log(
-            f"Error posting data from url https://{VCSA_HOST}/{VCSA_APIUSERS}: {e}",
+            f"Error posting data from url https://{vcsa_host}/{VCSA_APIUSERS}: {e}",
             "error",
         )
         return
@@ -187,7 +186,7 @@ def delete_vcsa_user(row) -> None:
         print(f"userid to delete: {userId}")
         try:
             delete(
-                f"https://{VCSA_HOST}/{VCSA_APIUSERS}/{userId}", headers=VCSA_HEADERS
+                f"https://{vcsa_host}/{VCSA_APIUSERS}/{userId}", headers=vcsa_headers
             )
             print(f"User '{row['username']}' successfully deleted!")
         except requests.RequestException:
@@ -199,7 +198,7 @@ def delete_vcsa_user(row) -> None:
 # Return the vcsa user id
 def get_vcsa_user_id(userName) -> None:
     try:
-        response = get(f"https://{VCSA_HOST}/{VCSA_APIUSERS}", headers=VCSA_HEADERS)
+        response = get(f"https://{vcsa_host}/{VCSA_APIUSERS}", headers=vcsa_headers)
         users = response.json()
         for user in users["Resources"]:
             if user["userName"] == userName:
@@ -208,14 +207,14 @@ def get_vcsa_user_id(userName) -> None:
     except requests.RequestException:
         return
     except UserNotFoundException:
-        print(f"User {userName} not found in {VCSA_HOST}")
+        print(f"User {userName} not found in {vcsa_host}")
 
 
 # Return the vcsa group id
 def get_vcsa_group_id(groupName) -> None:
 
     try:
-        response = get(f"https://{VCSA_HOST}/{VCSA_APIGROUPS}", VCSA_HEADERS)
+        response = get(f"https://{vcsa_host}/{VCSA_APIGROUPS}", vcsa_headers)
         groups = response.json()
         for group in groups["Resources"]:
             if group["displayName"] == groupName:
@@ -224,7 +223,7 @@ def get_vcsa_group_id(groupName) -> None:
     except requests.RequestException:
         return
     except GroupNotFoundException:
-        print(f"Group {groupName} not found in {VCSA_HOST}")
+        print(f"Group {groupName} not found in {vcsa_host}")
 
 
 # Remove user from group by ids
@@ -242,7 +241,7 @@ def remove_group_member(row):
             ],
         }
         try:
-            patch(f"https://{VCSA_HOST}/{VCSA_APIGROUPS}/{groupId}", json_data)
+            patch(f"https://{vcsa_host}/{VCSA_APIGROUPS}/{groupId}", json_data)
             print(
                 f"User '{row['username']}' successfully removed from group '{row['groupName']}'"
             )
@@ -260,9 +259,9 @@ def delete_vcsa_group(groupName):
         groupId = get_vcsa_group_id(groupName)
         try:
             delete(
-                f"https://{VCSA_HOST}/{VCSA_APIGROUPS}/{groupId}", headers=VCSA_HEADERS
+                f"https://{vcsa_host}/{VCSA_APIGROUPS}/{groupId}", headers=vcsa_headers
             )
-            print_and_log(f"Group '{groupName}' successfully deleted")
+            print_and_log(f"Group '{groupName}' successfully deleted in {vcsa_host}")
         except requests.RequestException:
             return
     except GroupNotFoundException as e:
@@ -285,14 +284,14 @@ def add_vcsa_member_group(row, groupName):
 
         if groupId is None or userId is None:
             print(
-                f"Skip adding member {row['username']} to group {groupName} in {VCSA_HOST}"
+                f"Skip adding member {row['username']} to group {groupName} in {vcsa_host}"
             )
         else:
             try:
                 # logging.info(f"PATCH - url: {url} - body: {json_data}")
                 response = requests.patch(
-                    f"https://{VCSA_HOST}/{VCSA_APIGROUPS}/{groupId}",
-                    headers=VCSA_HEADERS,
+                    f"https://{vcsa_host}/{VCSA_APIGROUPS}/{groupId}",
+                    headers=vcsa_headers,
                     json=json_data,
                     verify=False,
                 )
@@ -300,7 +299,7 @@ def add_vcsa_member_group(row, groupName):
             except requests.RequestException as e:
                 # handle errors
                 print_and_log(
-                    f"Error patching data from url https://{VCSA_HOST}/{VCSA_APIGROUPS}/{groupId} : {e}",
+                    f"Error patching data from url https://{vcsa_host}/{VCSA_APIGROUPS}/{groupId} : {e}",
                     "error",
                 )
                 raise e
@@ -417,9 +416,9 @@ def get_vcenter_members_of_group(groupName):
 
     if groupId is not None:
         response = get(
-            f"https://{VCSA_HOST}/{VCSA_APIUSERS}",
+            f"https://{vcsa_host}/{VCSA_APIUSERS}",
             {
-                "Authorization": "Bearer " + VCSA_BEARER_TOKEN,
+                "Authorization": "Bearer " + vcsa_bearer_token,
                 "Content-Type": "application/scim+json",
             },
         )
@@ -469,7 +468,7 @@ def test_okta_connection():
 def test_vcenter_connection():
 
     print("Start connecting to vCenter")
-    response = get(f"https://{VCSA_HOST}/{VCSA_APIGROUPS}", VCSA_HEADERS)
+    response = get(f"https://{vcsa_host}/{VCSA_APIGROUPS}", vcsa_headers)
     if response:
         print_and_log("Successfully connected to vCenter!")
 
@@ -531,57 +530,96 @@ def main():
             groupName = input()
 
     if action == "1" and groupName != "":
-        # sync group
-        logging.info(f"Start syncing group " + groupName)
-        okta_users = get_okta_members_of_group(groupName)
-        vcsa_users = get_vcenter_members_of_group(groupName)
+        for token, host in zip(tokens_list, hosts_list):
+            global vcsa_host
+            global vcsa_bearer_token
+            global vcsa_headers
 
-        users_to_add = []
+            vcsa_host = host
+            vcsa_bearer_token = token
+            vcsa_headers = {
+                "Authorization": "Bearer " + vcsa_bearer_token,
+                "Content-Type": "application/scim+json",
+            }
 
-        users_to_delete = []
+            # sync group
+            logging.info(
+                f"Start syncing group " + groupName + " in vCenter " + vcsa_host
+            )
+            okta_users = get_okta_members_of_group(groupName)
+            vcsa_users = get_vcenter_members_of_group(groupName)
 
-        # 1. Get users to create
-        if okta_users:
-            vcenter_user_ids = {user["user_id"] for user in vcsa_users}
-            for user in okta_users:
-                if user["user_id"] not in vcenter_user_ids:
-                    users_to_add.append(user)
+            users_to_add = []
 
-            if users_to_add:
-                for user in users_to_add:
-                    print_and_log("\nStart adding user: " + user + " to vCenter group")
-                    if get_vcsa_user_id(user["username"]) is None:
-                        create_vcsa_user(user, groupName)
-                    else:
-                        print(f"The user already exists in {VCSA_HOST}")
-                        add_vcsa_member_group(user, groupName)
+            users_to_delete = []
 
-        # 2. Get users to delete
-        if vcsa_users:
-            okta_user_ids = {user["user_id"] for user in okta_users}
-            for user in vcsa_users:
-                if user["user_id"] not in okta_user_ids:
-                    users_to_delete.append(user)
+            # 1. Get users to create
+            if okta_users:
+                vcenter_user_ids = {user["user_id"] for user in vcsa_users}
+                for user in okta_users:
+                    if user["user_id"] not in vcenter_user_ids:
+                        users_to_add.append(user)
 
-            if users_to_delete:
-                for user in users_to_delete:
-                    print_and_log(
-                        "\nStart deleting user:" + user + " from vCenter group"
-                    )
-                    delete_vcsa_user(user)
+                if users_to_add:
+                    for user in users_to_add:
+                        print_and_log(
+                            "\nStart adding user: " + user + " to vCenter group"
+                        )
+                        if get_vcsa_user_id(user["username"]) is None:
+                            create_vcsa_user(user, groupName)
+                        else:
+                            print(f"The user already exists in {vcsa_host}")
+                            add_vcsa_member_group(user, groupName)
 
-        if not users_to_delete and not users_to_add:
-            print_and_log("\nNo operations needed, the groups are already synced")
+            # 2. Get users to delete
+            if vcsa_users:
+                okta_user_ids = {user["user_id"] for user in okta_users}
+                for user in vcsa_users:
+                    if user["user_id"] not in okta_user_ids:
+                        users_to_delete.append(user)
 
+                if users_to_delete:
+                    for user in users_to_delete:
+                        print_and_log(
+                            "\nStart deleting user:" + user + " from vCenter group"
+                        )
+                        delete_vcsa_user(user)
+
+            if not users_to_delete and not users_to_add:
+                print_and_log("\nNo operations needed, the groups are already synced")
+
+            logging.info(f"Group {groupName} succesfully synced in vCenter {vcsa_host}")
     elif action == "2" and groupName != "":
-        # create group
-        print_and_log(f"Start creating group {groupName} in {VCSA_HOST}")
-        create_vcsa_group(groupName)
+        for token, host in zip(tokens_list, hosts_list):
+            global vcsa_host
+            global vcsa_bearer_token
+            global vcsa_headers
+
+            vcsa_host = host
+            vcsa_bearer_token = token
+            vcsa_headers = {
+                "Authorization": "Bearer " + vcsa_bearer_token,
+                "Content-Type": "application/scim+json",
+            }
+            # create group
+            print_and_log(f"Start creating group {groupName} in {vcsa_host}")
+            create_vcsa_group(groupName)
 
     elif action == "3" and groupName != "":
-        # delete group
-        print_and_log(f"Start deleting group {groupName}")
-        delete_vcsa_group(groupName)
+        for token, host in zip(tokens_list, hosts_list):
+            global vcsa_host
+            global vcsa_bearer_token
+            global vcsa_headers
+
+            vcsa_host = host
+            vcsa_bearer_token = token
+            vcsa_headers = {
+                "Authorization": "Bearer " + vcsa_bearer_token,
+                "Content-Type": "application/scim+json",
+            }
+            # delete group
+            print_and_log(f"Start deleting group {groupName} in {vcsa_host}")
+            delete_vcsa_group(groupName)
 
     elif action == "4" and object_to_test != "":
         # test connection
@@ -589,7 +627,18 @@ def main():
         if object_to_test.lower().strip() == "okta":
             test_okta_connection()
         elif object_to_test.lower().strip() == "vcenter":
-            test_vcenter_connection()
+            for token, host in zip(tokens_list, hosts_list):
+                global vcsa_host
+                global vcsa_bearer_token
+                global vcsa_headers
+
+                vcsa_host = host
+                vcsa_bearer_token = token
+                vcsa_headers = {
+                    "Authorization": "Bearer " + vcsa_bearer_token,
+                    "Content-Type": "application/scim+json",
+                }
+                test_vcenter_connection()
     else:
         print_and_log(
             "Invalid choice, please enter '1' to sync an existing group,'2' to creating a group, '3' to deleting a group or '4' to test a connection"
