@@ -451,10 +451,26 @@ def get_vcenter_members_of_group(groupName):
     return vcsa_users
 
 
+def test_okta_connection():
+
+    print("Start connecting to Okta")
+    okta_bearer_token = get_okta_bearer_token()
+    if okta_bearer_token:
+        print(f"Successfully connected to Okta!")
+
+
+def test_vcenter_connection():
+
+    print("Start connecting to vCenter")
+    response = get(f"https://{VCSA_HOST}/{VCSA_APIGROUPS}", VCSA_HEADERS)
+    if response:
+        print("Successfully connected to vCenter!")
+
+
 # Main function
 def main():
 
-    description = "This Python script handles some basics user and group operations into a vCenter from Okta source. It interacts with Okta and vCenter through the Okta API and through the vCenter SCIM API, using HTTP requests exclusively for managing user and group operations. The admitted operations are 3:\n\t1.Syncing group members from Okta to vCenter - create or delete user where is necessary;\n\t2.Create vCenter group;\n\t3.Delete vCenter group;\n\nAdditionally, the script logs events and errors for monitoring purposes."
+    description = "This Python script handles some basics user and group operations into a vCenter from Okta source. It interacts with Okta and vCenter through the Okta API and through the vCenter SCIM API, using HTTP requests exclusively for managing user and group operations. The admitted operations are 3:\n\t1.Syncing group members from Okta to vCenter - create or delete user where is necessary;\n\t2.Create vCenter group;\n\t3.Delete vCenter group;\n\t4.Test the connection to Okta or vCenter;\n\nAdditionally, the script logs events and errors for monitoring purposes."
 
     parser = argparse.ArgumentParser(
         description=description, formatter_class=argparse.RawTextHelpFormatter
@@ -472,6 +488,12 @@ def main():
     group.add_argument(
         "--delete", type=str, help="delete the vCenter group", metavar="groupName"
     )
+    group.add_argument(
+        "--test",
+        type=str,
+        help="test the connection to Okta or vCenter ",
+        metavar="object",
+    )
 
     args = parser.parse_args()
 
@@ -484,6 +506,9 @@ def main():
     elif args.delete:
         action = "3"
         groupName = args.delete
+    elif args.test:
+        action = "4"
+        object_to_test = args.test
     else:
         print("Select an option: \n\t1. Sync \n\t2. Create group \n\t3. Delete group")
         action = input()
@@ -538,9 +563,15 @@ def main():
         # delete group
         delete_vcsa_group(groupName)
 
+    elif action == "4" and object_to_test != "":
+        # test connection
+        if object_to_test.lower().strip() == "okta":
+            test_okta_connection()
+        elif object_to_test.lower().strip() == "vcenter":
+            test_vcenter_connection()
     else:
         print(
-            "Invalid choice, please enter '1' to sync an existing group,'2' to creating a group or '3' to deleting a group"
+            "Invalid choice, please enter '1' to sync an existing group,'2' to creating a group, '3' to deleting a group or '4' to test a connection"
         )
 
 
