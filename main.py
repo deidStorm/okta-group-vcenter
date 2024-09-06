@@ -18,9 +18,9 @@ log_dir = os.path.abspath(os.path.expanduser("~/logs_okta-group-vcenter"))
 
 os.makedirs(log_dir, exist_ok=True)
 
-log_file = os.path.join(
-    log_dir, "last-" + datetime.today().strftime("%A").lower() + ".log"
-)
+# log_file = os.path.join(log_dir, "last-" + datetime.today().strftime("%A").lower() + ".log")
+
+log_file = os.path.join(log_dir, datetime.today().strftime("%Y%m%d_%H%M%S") + ".log")
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
@@ -71,7 +71,8 @@ def print_and_log(text, level="info"):
 # Post call
 def post(url, headers, json_data={}) -> None:
     try:
-        logging.info(f"POST - url: {url} - headers: {headers} - body: {json_data}")
+        logging.info(f"POST - url: {url}")
+        # logging.info(f"POST - url: {url} - headers: {headers} - body: {json_data}")
         response = requests.post(url, headers, json=json_data, verify=False)
         response.raise_for_status()
         return response
@@ -96,7 +97,8 @@ def delete(url, headers) -> None:
 # Get call
 def get(url, headers={}):
     try:
-        logging.info(f"GET - url: {url} - headers: {headers}")
+        logging.info(f"GET - url: {url}")
+        # logging.info(f"GET - url: {url} - headers: {headers}")
         response = requests.get(url, headers=headers, verify=False)
         response.raise_for_status()
         return response
@@ -109,7 +111,8 @@ def get(url, headers={}):
 # Patch call
 def patch(url, headers, json_data={}):
     try:
-        logging.info(f"PATCH - url: {url} - body: {json_data}")
+        logging.info(f"PATCH - url: {url}")
+        # logging.info(f"PATCH - url: {url} - body: {json_data}")
         response = requests.patch(url, headers, json=json_data, verify=False)
         response.raise_for_status()
     except requests.RequestException as e:
@@ -136,9 +139,8 @@ def create_vcsa_user(row, groupName) -> None:
     }
 
     try:
-        logging.info(
-            f"POST - url: https://{vcsa_host}/{VCSA_APIUSERS} - headers: {vcsa_headers} - body: {json_data}"
-        )
+        # logging.info(f"POST - url: https://{vcsa_host}/{VCSA_APIUSERS} - headers: {vcsa_headers} - body: {json_data}")
+        logging.info(f"POST - url: https://{vcsa_host}/{VCSA_APIUSERS}")
         requests.post(
             f"https://{vcsa_host}/{VCSA_APIUSERS}",
             headers=vcsa_headers,
@@ -161,9 +163,8 @@ def create_vcsa_user(row, groupName) -> None:
 def create_vcsa_group(groupName) -> None:
     json_data = {"displayName": groupName, "schemas": ["urn:scim:schemas:core:1.0"]}
     try:
-        logging.info(
-            f"POST - url: https://{vcsa_host}/{VCSA_APIUSERS} - headers: {vcsa_headers} - body: {json_data}"
-        )
+        logging.info(f"POST - url: https://{vcsa_host}/{VCSA_APIUSERS}")
+        # logging.info(f"POST - url: https://{vcsa_host}/{VCSA_APIUSERS} - headers: {vcsa_headers} - body: {json_data}")
         requests.post(
             f"https://{vcsa_host}/{VCSA_APIGROUPS}",
             headers=vcsa_headers,
@@ -293,7 +294,9 @@ def add_vcsa_member_group(row, groupName):
             )
         else:
             try:
-                # logging.info(f"PATCH - url: {url} - body: {json_data}")
+                logging.info(
+                    f"PATCH - url: https://{vcsa_host}/{VCSA_APIGROUPS}/{groupId}"
+                )
                 response = requests.patch(
                     f"https://{vcsa_host}/{VCSA_APIGROUPS}/{groupId}",
                     headers=vcsa_headers,
